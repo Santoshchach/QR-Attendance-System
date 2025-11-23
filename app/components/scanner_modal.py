@@ -25,12 +25,15 @@ window.qrScanner = {
             overlay.style.boxShadow = "none";
         }
 
-        // Check browser support
+        // 1. Check Secure Context (HTTPS)
+        if (!window.isSecureContext) {
+            this.showError("Camera access requires a secure context (HTTPS or localhost).");
+            return;
+        }
+
+        // 2. Check Browser Support
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            if(statusMsg) {
-                statusMsg.innerText = "Error: Camera API not supported in this browser. Please use a modern mobile browser (Chrome, Safari).";
-                statusMsg.className = "text-xs text-red-500 mb-2 text-center font-bold";
-            }
+            this.showError("Camera API not supported in this browser. Please use a modern mobile browser.");
             return;
         }
 
@@ -49,12 +52,17 @@ window.qrScanner = {
             .then(stream => {
                 this.stream = stream;
                 video.srcObject = stream;
-                video.setAttribute("playsinline", true);
-                video.play().catch(e => console.error("Play error:", e));
+                video.setAttribute("playsinline", true); // Critical for iOS
 
-                requestAnimationFrame(this.tick.bind(this));
-
-                if(statusMsg) statusMsg.innerText = "Camera active. Align QR code within frame.";
+                // Ensure video plays only when metadata is loaded
+                video.onloadedmetadata = () => {
+                    video.play().catch(e => {
+                        console.error("Play error:", e);
+                        this.showError("Error starting video stream: " + e.message);
+                    });
+                    requestAnimationFrame(this.tick.bind(this));
+                    if(statusMsg) statusMsg.innerText = "Camera active. Align QR code within frame.";
+                };
             })
             .catch(err => {
                 console.error("Camera access error:", err);
@@ -63,18 +71,23 @@ window.qrScanner = {
                 if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
                     msg = "Permission denied. Please allow camera access in your browser settings.";
                 } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-                    msg = "No camera found.";
+                    msg = "No camera found on this device.";
                 } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
                     msg = "Camera is already in use by another app.";
-                } else if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                    msg = "Camera access requires HTTPS.";
+                } else if (err.name === 'OverconstrainedError') {
+                    msg = "Camera constraints not satisfied. Try switching camera.";
                 }
 
-                if(statusMsg) {
-                    statusMsg.innerText = msg;
-                    statusMsg.className = "text-xs text-red-600 mb-2 text-center font-bold bg-red-50 p-2 rounded border border-red-100";
-                }
+                this.showError(msg);
             });
+    },
+
+    showError: function(msg) {
+        const statusMsg = document.getElementById("qr-status");
+        if(statusMsg) {
+            statusMsg.innerText = msg;
+            statusMsg.className = "text-xs text-red-600 mb-2 text-center font-bold bg-red-50 p-2 rounded border border-red-100";
+        }
     },
 
     stop: function() {

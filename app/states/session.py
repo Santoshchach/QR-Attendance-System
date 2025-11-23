@@ -22,11 +22,29 @@ class SessionState(rx.State):
 
     @rx.event
     async def load_active_sessions(self):
-        """Load all active sessions for the current teacher."""
+        """Load all active sessions for the current teacher, expiring old ones first."""
         auth_state = await self.get_state(AuthState)
         if not auth_state.is_authenticated or auth_state.user_role != "teacher":
             return
         with rx.session() as session:
+            now = datetime.now(timezone.utc)
+            active_stm = (
+                select(Session)
+                .where(Session.teacher_id == auth_state.user_id)
+                .where(Session.is_active == True)
+            )
+            candidates = session.exec(active_stm).all()
+            expired_found = False
+            for s in candidates:
+                expires_at = s.expires_at
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if now > expires_at:
+                    s.is_active = False
+                    session.add(s)
+                    expired_found = True
+            if expired_found:
+                session.commit()
             statement = (
                 select(Session)
                 .where(Session.teacher_id == auth_state.user_id)

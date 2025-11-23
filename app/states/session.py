@@ -4,7 +4,7 @@ import io
 import base64
 from datetime import datetime, timedelta, timezone
 from sqlmodel import select, func, desc
-from app.models import Session, Attendance
+from app.models import Session, Attendance, ensure_timezone
 from app.states.auth import AuthState
 
 
@@ -36,9 +36,7 @@ class SessionState(rx.State):
             candidates = session.exec(active_stm).all()
             expired_found = False
             for s in candidates:
-                expires_at = s.expires_at
-                if expires_at.tzinfo is None:
-                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                expires_at = ensure_timezone(s.expires_at)
                 if now > expires_at:
                     s.is_active = False
                     session.add(s)
@@ -51,7 +49,11 @@ class SessionState(rx.State):
                 .where(Session.is_active == True)
                 .order_by(desc(Session.created_at))
             )
-            self.active_sessions = session.exec(statement).all()
+            sessions = session.exec(statement).all()
+            for s in sessions:
+                s.created_at = ensure_timezone(s.created_at)
+                s.expires_at = ensure_timezone(s.expires_at)
+            self.active_sessions = sessions
             self.attendee_counts = {}
             for s in self.active_sessions:
                 count_stmt = select(func.count()).where(Attendance.session_id == s.id)
@@ -76,6 +78,8 @@ class SessionState(rx.State):
             session.add(new_session)
             session.commit()
             session.refresh(new_session)
+            new_session.created_at = ensure_timezone(new_session.created_at)
+            new_session.expires_at = ensure_timezone(new_session.expires_at)
         self.course_name = ""
         self.show_qr_code(
             new_session.id, new_session.course_name, new_session.expires_at.isoformat()

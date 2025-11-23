@@ -1,7 +1,7 @@
 import reflex as rx
 from sqlmodel import select, func, desc
-from datetime import datetime, timedelta
-from app.models import Session, Attendance, User
+from datetime import datetime, timedelta, timezone
+from app.models import Session, Attendance, User, ensure_timezone
 from app.states.auth import AuthState
 import random
 import string
@@ -38,11 +38,12 @@ class AnalyticsState(rx.State):
             query = select(Session).where(Session.teacher_id == teacher_id)
             if self.selected_course_id != "all":
                 query = query.where(Session.id == int(self.selected_course_id))
+            now_utc = datetime.now(timezone.utc)
             if self.date_range == "week":
-                week_ago = datetime.now() - timedelta(days=7)
+                week_ago = now_utc - timedelta(days=7)
                 query = query.where(Session.created_at >= week_ago)
             elif self.date_range == "month":
-                month_ago = datetime.now() - timedelta(days=30)
+                month_ago = now_utc - timedelta(days=30)
                 query = query.where(Session.created_at >= month_ago)
             sessions = session.exec(query).all()
             session_ids = [s.id for s in sessions]

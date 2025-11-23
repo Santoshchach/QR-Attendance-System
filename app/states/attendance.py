@@ -2,7 +2,7 @@ import reflex as rx
 import logging
 from sqlmodel import select, desc
 from datetime import datetime, timezone
-from app.models import Session, Attendance
+from app.models import Session, Attendance, ensure_timezone
 from app.states.auth import AuthState
 
 
@@ -50,9 +50,7 @@ class AttendanceState(rx.State):
                 yield rx.toast.error("This session has ended.")
                 return
             now = datetime.now(timezone.utc)
-            expires_at = session_obj.expires_at
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            expires_at = ensure_timezone(session_obj.expires_at)
             if now > expires_at:
                 yield rx.toast.error("This session has expired.")
                 return

@@ -7,6 +7,15 @@ def get_utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def ensure_timezone(dt: datetime | None) -> datetime | None:
+    """Ensure a datetime object has timezone information (UTC)."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 class User(SQLModel, table=True):
     """User model for both teachers and students."""
 
